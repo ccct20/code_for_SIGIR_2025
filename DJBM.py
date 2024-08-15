@@ -18,23 +18,21 @@ class DJBM():
 
     def startConstructGraph(self):
         t_1=time()
-        self.initializeNodes() # 0.06s
+        self.initializeNodes()
         t_2=time()
-        self.constructTrainGraph()  #7.59s
+        self.constructTrainGraph()
         t_3=time()
-        self.saveVariables() #7.59 s
+        self.saveVariables()
         t_4=time()
-        self.defineMap() #7.59 s
+        self.defineMap()
         t_5=time()
 
         print("cost:%f,%f,%f,%f"%(t_2-t_1, t_3-t_1, t_4-t_1, t_5-t_1))
 
 
 
-
     def inputSupply(self, data_dict):
         low_att_std = 1.0
-
 
         #---------------- USER-USER ----------------#
 
@@ -1149,18 +1147,6 @@ class DJBM():
         }
 
         self.map_dict = map_dict
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
