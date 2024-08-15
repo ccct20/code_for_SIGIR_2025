@@ -29,9 +29,6 @@ class DataHelper():
             data_dict['CONSUMED_ITEMS_INDICES_INPUT'] = self.consumed_items_indices_Tdict_list
             data_dict['CONSUMED_ITEMS_VALUES_INPUT'] = self.consumed_items_values_Tdict_list
 
-            # data_dict['CONSUMED_ITEMS_INCREMENTAL_GRAPH_INDICES_INPUT'] = self.consumed_items_Incremental_graph_indices_Tdict_list
-            # data_dict['CONSUMED_ITEMS_INCREMENTAL_GRAPH_VALUES_INPUT'] = self.consumed_items_Incremental_graph_values_Tdict_list
-
 
         if 'ITEM_CUSTOMER_SPARSE_MATRIX' in model.supply_set:
             self.generateConsumedItemsSparseMatrixForItemUser()      
@@ -1679,10 +1676,6 @@ class DataHelper():
             consumed_item_num_Tdict_list = {}
             consumed_items_T_dict = {}
 
-            # self.consumed_items_Incremental_graph_indices_Tdict_list = {}
-            # self.consumed_items_Incremental_graph_values_Tdict_list = {}
-            # Incremental_graph_consumed_items_T_dict = {}
-
 
             #******** New version for Temporal Sparse data Format ********#
 
@@ -1700,7 +1693,7 @@ class DataHelper():
                 consumed_items_indices_Tdict_list[t] = []
                 consumed_items_values_Tdict_list[t] = []
                 for u in user_list[t]:
-                    if u==3677: #作用?
+                    if u==3677:
                         flag=1
                      
                     for i in rating_positive_data_for_user_item_withoutR_Tdict[t][u]:
@@ -1926,6 +1919,7 @@ class DataHelper():
                 for t in social_user_list.keys():
                     first_trust_second_trust_neighbors[t] = defaultdict(set)
                     for user in range(num_users):
+                        # For each user, extract the trust users they believe in as a second-order positive relationship
                         for trust_neighbor in social_neighbors_num_graph_Tdict[t][user]:
                             first_trust_second_trust_neighbors[t][user].update(social_neighbors_num_graph_Tdict[t][trust_neighbor])
 
@@ -1933,13 +1927,15 @@ class DataHelper():
                 for t in social_user_list.keys():
                     first_dis_second_dis_neighbors[t] = defaultdict(set)
                     for user in range(num_users):
+                        # Check the number of first-order negative relationships
                         num_first_dis = len(self.final_first_distrust_neighbors_Tdict[t][user])
-                        if num_first_dis <= num_limit:
+                        if num_first_dis <= num_limit: #Not exceeding the quantity limit
                             for distrust_neighbor in self.final_first_distrust_neighbors_Tdict[t][user]:
                                 num_extract = k_2order_negtive
+                                # Randomly select （num_extract） from second-order negative relationships
                                 tmp_extract_distrust_neighbors = random.sample(list(self.all_distrust_neighbors_Tdict[t][distrust_neighbor]), num_extract)
                                 first_dis_second_dis_neighbors[t][user].update(set(tmp_extract_distrust_neighbors))
-                        else:
+                        else: # Exceed the quantity limit
                             tmp_neighbors_list = random.sample(list(self.final_first_distrust_neighbors_Tdict[t][user]), num_limit)
                             for distrust_neighbor in tmp_neighbors_list:
                                 num_extract = k_2order_negtive
@@ -2005,7 +2001,9 @@ class DataHelper():
                         
                         for u2 in tmp_neighbors_list:
                             
+                            # indices
                             first_trust_second_trust_neighbors_Tdict_indices_Tdict_list[stamp].append([u1,u2])
+                            # values_avg
                             first_trust_second_trust_neighbors_Tdict_values_Tdict_list[stamp].append(1.0/len(first_trust_second_trust_neighbors_Tdict[stamp][u1]))
 
                 self.first_trust_second_trust_neighbors_Tdict_indices_Tdict_list = first_trust_second_trust_neighbors_Tdict_indices_Tdict_list
@@ -2050,8 +2048,9 @@ class DataHelper():
                         tmp_neighbors_list = sorted(list(first_dis_second_dis_neighbors_Tdict[stamp][u1]))
                         
                         for u2 in tmp_neighbors_list:
-                            
+                            # indices
                             first_dis_second_dis_neighbors_Tdict_indices_Tdict_list[stamp].append([u1,u2])
+                            # values_avg
                             first_dis_second_dis_neighbors_Tdict_values_Tdict_list[stamp].append(1.0/len(first_dis_second_dis_neighbors_Tdict[stamp][u1]))
 
                 self.first_dis_second_dis_neighbors_Tdict_indices_Tdict_list = first_dis_second_dis_neighbors_Tdict_indices_Tdict_list
