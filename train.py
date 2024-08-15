@@ -19,63 +19,23 @@ def start(conf, data, model, evaluate):
     # define log name 
     log_path = os.path.join(os.getcwd(),'log/gowalla_balance_参数修改后log/','%s_%s_%sfactor_%sdepth_%sneg_%s_att_att.log'\
                              % (conf.data_name, conf.model_name, conf.k, conf.layer_depth, conf.num_social_negatives, conf.k_2order_negtive))
-    # log_path = os.path.join(os.getcwd(),'log/epinions_balance_unbalance_log/second_layer_balance+unbalance_log/','%s_%s_%sfactor_current.log' % (conf.data_name, conf.model_name, conf.k))
 
-    # start to prepare data for training and evaluating
     data.initializeRankingHandle()
 
 
     print('System start to load data...')
-
     t0 = time()
-
-
     d_train_rating, d_train_social = data.train_rating, data.train_social
     d_train_rating.initializeRatingTrain("r_train")
     d_train_social.initializeSocialTrain("s_train")
 
     train_social_hash_data = d_train_social.social_hash_data
-    
-   
-
-
 
     d_test_rating, d_test_social = data.test_rating, data.test_social
     d_test_rating.initializeRatingTestLoss('r_test')
     d_test_social.initializeSocialTestLoss('s_test')
-
     t1 = time()
-    print('Data has been loaded successfully, cost:%.4fs' % (t1 - t0))  # 9s
-
-    #set_trace()
-
-    '''
-    user_test_analy={} 
-    user_test_analy['1']=[]     # 311    # 1:  311 
-    user_test_analy['1-2']=[]   # 494    # 2:  183
-    user_test_analy['1-3']=[]   # 595    # 3:  101 
-    user_test_analy['1-4']=[]   # 677    # 4:  82
-    user_test_analy['1-5']=[]   # 726    # 5:  49
-    user_test_analy['5-']=[]    # 164    # 5+: 164
-
-  
-    for user in d_test_social.social_positive_data_for_user1_user2_T_Udict.keys():
-        if(len(d_test_social.social_positive_data_for_user1_user2_T_Udict[user])<2):
-            user_test_analy['1'].append(user)
-        if(len(d_test_social.social_positive_data_for_user1_user2_T_Udict[user])<3):
-            user_test_analy['1-2'].append(user)
-        if(len(d_test_social.social_positive_data_for_user1_user2_T_Udict[user])<4):
-            user_test_analy['1-3'].append(user)
-        if(len(d_test_social.social_positive_data_for_user1_user2_T_Udict[user])<5):
-            user_test_analy['1-4'].append(user)
-        if(len(d_test_social.social_positive_data_for_user1_user2_T_Udict[user])<6):
-            user_test_analy['1-5'].append(user)
-        if(len(d_test_social.social_positive_data_for_user1_user2_T_Udict[user])>5):
-            user_test_analy['5-'].append(user)
-
-    '''
-
-
+    print('Data has been loaded successfully, cost:%.4fs' % (t1 - t0))
 
 
     d_test_eva_rating, d_test_eva_social = data.test_rating_eva, data.test_social_eva
@@ -87,17 +47,15 @@ def start(conf, data, model, evaluate):
     t1=time()
     data_dict = d_train_rating.prepareModelSupplement(model)
     t2=time()
-    print("**** prepare rating training data in train.py ,cost: %f ****"%(t2-t1))  # 57s
+    print("**** prepare rating training data in train.py ,cost: %f ****"%(t2-t1))
 
 
     print("Start prepareModelSupplement on data_dict tor social training")
     t1=time()
-    s_data_dict = d_train_social.prepareModelSocialSupplement(model)  # 307s 
-    # d_train_social.generateSocialTrainset()
+    s_data_dict = d_train_social.prepareModelSocialSupplement(model)
     d_train_social.generateSocialTrainNegative()
     t2=time()
     print("**** prepare social training data in train.py cost: %f ****"%(t2-t1))
-
 
 
     print("Start updating data_dict")
@@ -107,7 +65,6 @@ def start(conf, data, model, evaluate):
     print("**** data_dict updating cost: %f ****"%(t1-t0))
 
 
-
     print("Start input supply data_dict")
     t0=time()
     model.inputSupply(data_dict)
@@ -115,41 +72,12 @@ def start(conf, data, model, evaluate):
     print("**** inputsupply cost: %f ****"%(t1-t0))
 
 
-    #set_trace()
-
- 
-
-
-
-
-    #d_train, d_val, d_test, d_test_eva = data.train, data.val, data.test, data.test_eva
-    
-
-    #print('System start to load data...')
-    #t0 = time()
-
-
-    # d_train.initializeRatingTrain()
-    # d_val.initializeRankingVT()
-    # d_test.initializeRankingVT()
-    # d_test_eva.initalizeRankingEva()
-
-
-    #t1 = time()
-    #print('Data has been loaded successfully, cost:%.4fs' % (t1 - t0))
-
-    # prepare model necessary data.
-    #data_dict = d_train.prepareModelSupplement(model)
-
-   
-    #model.inputSupply(data_dict)
     print("Start construct model graph")
     t1=time()
     model.startConstructGraph()
     t2=time()
     print("**** startConstructGraph in train.py cost: %f ****"%(t2-t1))
 
-    #set_trace()
 
     # standard tensorflow running environment initialize
     tf_conf = tf.ConfigProto()
@@ -158,22 +86,24 @@ def start(conf, data, model, evaluate):
     sess = tf.Session(config=tf_conf)
     sess.run(model.init)
 
-
-    saver = tf.train.Saver()
+    # the model save path
     save_path = os.path.join(os.getcwd(),'model/2/','%s_%s_%sfactor_%sdepth_%sneg_%s_model.ckpt' % (conf.data_name, conf.model_name, conf.k, conf.layer_depth, conf.num_social_negatives, conf.k_2order_negtive))
+    saver = tf.train.Saver()    
     
+    # load graph structure
     # saver = tf.train.import_meta_graph(save_path +'.meta')
     
+    # save model
     model_path = saver.save(sess, save_path)
     print("Model saved in path: %s" % model_path)
-
-
+    
+    # load model
     if conf.pretrain_flag == 1:
         saver.restore(sess, save_path)
 
+    
     # set debug_flag=0, doesn't print any results
     log = Logging(log_path)
- 
     log.record('Following will output the evaluation of the model:')
 
     
@@ -188,10 +118,7 @@ def start(conf, data, model, evaluate):
         #print ("terminal_flag:%f"%d_train_rating.terminal_flag)
         #print ("index:%d"%d_train_rating.index)
 
-
         while d_train_rating.terminal_flag:
-
-            
 
             d_train_rating.getTrainRatingBatch()
             d_train_rating.linkedMapRatingTrain()
@@ -199,10 +126,6 @@ def start(conf, data, model, evaluate):
             d_train_social.getTrainSocialBatch()
             d_train_social.linkedMapSocialTrain()
             
-
-
-            
-
             train_feed_dict = {}
             
             for (key, value) in model.map_dict['r_train'].items():
@@ -218,7 +141,6 @@ def start(conf, data, model, evaluate):
                                                         model.map_dict['out']['low_att_user_item_sparse_matrix']], feed_dict=train_feed_dict)
             
             
-
             
             #print r_loss
             #print s_loss
@@ -244,9 +166,6 @@ def start(conf, data, model, evaluate):
         print("social loss:%f"%(np.mean(tmp_s_loss)))
         #print train_loss
         
-
-
-
         # compute val loss and test loss
         
         '''
@@ -329,8 +248,6 @@ def start(conf, data, model, evaluate):
             return s_positive_predictions
 
 
-
-
         def getNegativeRatingPredictions():
             negative_predictions = {}
             terminal_flag = 1
@@ -379,9 +296,6 @@ def start(conf, data, model, evaluate):
             return negative_predictions
 
 
-
-
-
         tt2 = time()
 
         r_index_dict = d_test_eva_rating.eva_rating_index_dict
@@ -401,8 +315,6 @@ def start(conf, data, model, evaluate):
         #set_trace()
         d_test_eva_rating.index = 0 # !!!important, prepare for new batch
         d_test_eva_social.index = 0
-
-        
 
         
         #set_trace()
