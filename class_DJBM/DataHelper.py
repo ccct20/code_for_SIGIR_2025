@@ -1179,7 +1179,7 @@ class DataHelper():
         #t_gtrb1 = time()
 
         rating_positive_data_for_user_item_T_Udict = self.rating_positive_data_for_user_item_T_Udict
-        rating_negative_data = self.rating_negative_data
+        # rating_negative_data = self.rating_negative_data
         rating_user_list = self.rating_user_list   # id up to 4630, but the list len is 4421, means some of the users miss rating records
         index = self.index
         batch_size = self.conf.training_r_batch_size
