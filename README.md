@@ -6,7 +6,7 @@ Title: Enhancing Dynamic Trust and Interest Prediction Through Balance Relations
 
 Paper ID: 10207
 
-加两个我们的模型图
+![](https://github.com/ccct20/code_for_AAAI2025/images/figure3_new.emf)
 
 In this paper, we reconsider the often overlooked informative relationships among unidentified social links and propose BRAJM to jointly model two types of user behavior on SNSs. Specifically, the proposed framework includes a comprehensive joint modeling framework, which includes a data augmentation module based on social balance theory, the recurrent neural networks for extracting dynamic embeddings, the time-aware multi-level neural attention networks to flexibly aggregate information from both node and graph perspectives, thereby enhancing the quality of embeddings, and an interactive module to mutually enhance the effectiveness of two prediction tasks. Extensive experiments demonstrate the effectiveness of our proposed framework.
 
