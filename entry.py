@@ -1,12 +1,12 @@
 import sys, os, argparse
 
-sys.path.append(os.path.join(os.getcwd(), 'class_DJBM'))
+sys.path.append(os.path.join(os.getcwd(), 'class_BRAJM'))
 
 from ParserConf import ParserConf
 from DataUtil import DataUtil
 from Evaluate import Evaluate
 
-from DJBM import DJBM
+from BRAJM import BRAJM
 
 from ipdb import set_trace
 
