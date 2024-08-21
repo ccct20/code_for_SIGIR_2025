@@ -1979,7 +1979,7 @@ class DataHelper():
                 self.first_trust_second_trust_neighbors_Tdict_values_Tdict_list = np.load(os.getcwd()+'/data/'+self.conf.data_name+'/balance_unbalance_data_new/%s_factor/'%k+'first_trust_second_trust_neighbors_Tdict_values_Tdict_list_%sneg.npy'%k_2order_negtive, allow_pickle=True).item()
             
                 t2 =time()
-                print("END Loading second trust Balance Social Neighbors Sparse Matrix 2.1hop, cost: %f"%(t2-t1)) # 124秒
+                print("END Loading second trust Balance Social Neighbors Sparse Matrix 2.1hop, cost: %f"%(t2-t1))
 
             except IOError:
 
@@ -2027,7 +2027,7 @@ class DataHelper():
                 self.first_dis_second_dis_neighbors_Tdict_values_Tdict_list = np.load(os.getcwd()+'/data/'+self.conf.data_name+'/balance_unbalance_data_new/%s_factor/'%k+'first_dis_second_dis_neighbors_Tdict_values_Tdict_list_%sneg.npy'%k_2order_negtive, allow_pickle=True).item()
             
                 t2 =time()
-                print("END Loading second trust Balance Social Neighbors Sparse Matrix 2.2hop, cost: %f"%(t2-t1)) # 124秒
+                print("END Loading second trust Balance Social Neighbors Sparse Matrix 2.2hop, cost: %f"%(t2-t1))
 
             except IOError:
 
