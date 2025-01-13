@@ -7,7 +7,7 @@ from time import time
 from tensorflow.contrib.rnn.python.ops import rnn_cell
 #import keras
 
-class DJBM():
+class BE4JM():
     def __init__(self, conf):
         self.conf = conf
         self.supply_set = (
