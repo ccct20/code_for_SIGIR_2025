@@ -7,6 +7,7 @@ import random
 import tensorflow as tf
 from ipdb import set_trace
 import os
+import math
 
 
 def Normalization_gowalla(inX):
@@ -1832,24 +1833,31 @@ class DataHelper():
 
 ################################ Balance Social Neighbors ################################
 
+    
     def arrangeBalanceSocialData(self):
         
-            social_neighbors_num_graph_Tdict = self.social_neighbors_T_dict # first trust set
-            social_user_list = self.social_neighbors_T_dict
+            social_neighbors_num_graph_Tdict = self.social_neighbors_T_dict #1阶正关系集合,num[10]=1261
             num_users = self.conf.num_users
-            k = self.conf.k
+            k = self.conf.k_neg
             k_2order_negtive = self.conf.k_2order_negtive
+            k_2order_positive = self.conf.k_2order_positive
             num_limit = self.conf.num_limit
             
+
+            def safe_sample(lst, n):
+                if n > len(lst):
+                    n = len(lst)
+                return random.sample(lst, n)
             
-            # First distrust set
+            
+            # 1阶负关系集合
             try:
                 print("**** START Loading 1 hop arrangeBalanceSocialData")
                 t_absd1 = time()
-                self.final_first_distrust_neighbors_Tdict = np.load(os.getcwd()+'/data/'+self.conf.data_name+'/balance_unbalance_data/%s_factor/'%k+'First_distrust_neighbors_Tdict_current.npy' ,allow_pickle=True).item()
+                self.final_first_distrust_neighbors_Tdict = np.load(os.getcwd()+'/data/'+self.conf.data_name+'/balance_unbalance_data_new/%s_factor/'%k+'First_distrust_neighbors_Tdict.npy' ,allow_pickle=True).item()
                 self.all_distrust_neighbors_Tdict = np.load(os.getcwd()+'/data/'+self.conf.data_name+'/'+'All_distrust_neighbors_Tdict_train.npy',allow_pickle=True).item()
                 t_absd2 = time()
-                print("**** END Loading 1 hop arrangeBalanceSocialData, cost: %f ****"%(t_absd2-t_absd1))
+                print("**** END Loading 1 hop arrangeBalanceSocialData, cost: %f ****"%(t_absd2-t_absd1))  # 43.52秒
 
             except IOError:
                 
@@ -1860,91 +1868,186 @@ class DataHelper():
                 distrust_neighbors_Tdict = defaultdict(set)
                 final_first_distrust_neighbors_Tdict = defaultdict(set)
 
-                # Extract all untrusted users
                 def generate_distrust_neighbors(user):
                     return (other_user for other_user in range(num_users) if other_user not in social_neighbors_num_graph_Tdict[t][user] and other_user != user)
                 
-                for t in social_user_list.keys():
+                for t in social_neighbors_num_graph_Tdict.keys():
                     distrust_neighbors_Tdict[t] = defaultdict(set)
-                    final_first_distrust_neighbors_Tdict[t] = defaultdict(set)
-
                     for user in range(num_users):
                         distrust_neighbors_gen = generate_distrust_neighbors(user)
-                        # Convert the generator to a list and save it to a dictionary
+                        # 将生成器转换为列表，并保存到字典中
                         distrust_neighbors_Tdict[t][user] = set(distrust_neighbors_gen)
-                        
-                        # Do a random sampling of first-order distrusted users
+                
+                self.all_distrust_neighbors_Tdict = distrust_neighbors_Tdict
+                self.average_neighbors_per_t = self.Compute_average_neighbors_number()
+                
+                filtered_1order_neighbors_Tdict = self.Filter_1order_inactive_neighbors()
+                
+                for t in social_neighbors_num_graph_Tdict.keys():
+                    final_first_distrust_neighbors_Tdict[t] = defaultdict(set)
+                    
+                    for user in range(num_users):
+                        # 对一阶不信任用户做一个随机采样,这里取的是信任用户的2倍,4倍会超出范围
+                        # num_distrust = int(0.1 * len(distrust_neighbors_Tdict[t][user]))
                         num_trust = len(social_neighbors_num_graph_Tdict[t][user])
-                        if (k+1) * num_trust > num_users:
-                            num_distrust = num_users - num_trust -1 #If it exceeds the number that can be drawn, draw all negative samples directly (removing itself)
-                        else:
-                            num_distrust = k * num_trust #Not exceeded, k-fold positive sample size drawn
-
-                        # Randomly select a user from the set of untrusted users for that user
-                        final_distrust_neighbors = random.sample(list(distrust_neighbors_Tdict[t][user]), num_distrust)
-                        
-                        # Save to Dictionary
+                        num_distrust = k * num_trust #未超出，抽k倍正样本数量
+                        # 从该用户的筛选的不信任用户集合中随机选择用户
+                        final_distrust_neighbors = safe_sample(list(filtered_1order_neighbors_Tdict[t][user]), num_distrust)
+                        # 保存到字典中
                         final_first_distrust_neighbors_Tdict[t][user] = sorted(set(final_distrust_neighbors))
 
-                self.all_distrust_neighbors_Tdict = distrust_neighbors_Tdict
+
                 self.final_first_distrust_neighbors_Tdict = final_first_distrust_neighbors_Tdict
                 # set_trace()
-                np.save(os.getcwd()+'/data/'+self.conf.data_name+'/'+'All_distrust_neighbors_Tdict_train.npy',distrust_neighbors_Tdict)
-                np.save(os.getcwd()+'/data/'+self.conf.data_name+'/balance_unbalance_data/%s_factor/'%k+'First_distrust_neighbors_Tdict_current.npy' ,final_first_distrust_neighbors_Tdict)
+                np.save(os.getcwd()+'/data/'+self.conf.data_name+'/All_distrust_neighbors_Tdict_train.npy',distrust_neighbors_Tdict)
+                np.save(os.getcwd()+'/data/'+self.conf.data_name+'/balance_unbalance_data_new/%s_factor/'%k+'First_distrust_neighbors_Tdict.npy' ,final_first_distrust_neighbors_Tdict)
 
+                
                 t_absd2_2hop = time()
                 print("**** END create 1-hop relationships of function, cost: %f ****"%(t_absd2_2hop-t_absd1_1hop))
 
+   
+            # # 1阶负关系集合 - sorted版
+            # try:
+            #     print("**** START Loading 1 hop arrangeBalanceSocialData")
+            #     t_absd1 = time()
+            #     self.final_first_distrust_neighbors_Tdict = np.load(os.getcwd()+'/data/'+self.conf.data_name+'/balance_unbalance_data_new/%s_factor/'%k+'First_distrust_neighbors_Tdict.npy' ,allow_pickle=True).item()
+            #     self.all_distrust_neighbors_Tdict = np.load(os.getcwd()+'/data/'+self.conf.data_name+'/'+'All_distrust_neighbors_Tdict_train.npy',allow_pickle=True).item()
+            #     t_absd2 = time()
+            #     print("**** END Loading 1 hop arrangeBalanceSocialData, cost: %f ****"%(t_absd2-t_absd1))  # 43.52秒
+
+            # except IOError:
+                
+            #     print("**** START create 1-hop relationships of function arrangeBalanceSocialData")
+            #     t_absd1_1hop = time()
+
+
+            #     distrust_neighbors_Tdict = defaultdict(set)
+            #     final_first_distrust_neighbors_Tdict = defaultdict(set)
+
+            #     def generate_distrust_neighbors(user):
+            #         return (other_user for other_user in range(num_users) if other_user not in social_neighbors_num_graph_Tdict[t][user] and other_user != user)
+                
+                
+            #     for t in social_neighbors_num_graph_Tdict.keys():
+            #         distrust_neighbors_Tdict[t] = defaultdict(set)
+            #         final_first_distrust_neighbors_Tdict[t] = defaultdict(set)
+
+            #         for user in range(num_users):
+            #             distrust_neighbors_gen = generate_distrust_neighbors(user)
+            #             # 将生成器转换为列表，并保存到字典中
+            #             distrust_neighbors_Tdict[t][user] = set(distrust_neighbors_gen)
+                        
+            #             # 对一阶不信任用户做一个随机采样,这里取的是信任用户的2倍,4倍会超出范围
+            #             # num_distrust = int(0.1 * len(distrust_neighbors_Tdict[t][user]))
+            #             num_trust = len(social_neighbors_num_graph_Tdict[t][user])
+            #             if (k+1) * num_trust > num_users:
+            #                 num_distrust = num_users - num_trust -1 #如果超出可抽取数量，直接抽所有负样本(去掉自身)
+            #             else:
+            #                 num_distrust = k * num_trust #未超出，抽k倍正样本数量
+                        
+            #             sorted_keys = sorted(distrust_neighbors_Tdict[t][user], key=lambda p: len(social_neighbors_num_graph_Tdict[t][p]), reverse=True)
+            #             lenth = int(len(distrust_neighbors_Tdict[t][user])/2)
+            #             final_distrust_neighbors = (list(sorted_keys))[:num_distrust]
+            #             # set_trace()
+            #             # 从该用户的不信任用户集合中随机选择用户
+            #             # final_distrust_neighbors = random.sample(list(distrust_neighbors_Tdict[t][user]), num_distrust)
+                        
+            #             # 保存到字典中
+            #             final_first_distrust_neighbors_Tdict[t][user] = sorted(set(final_distrust_neighbors))
+
+            #     self.all_distrust_neighbors_Tdict = distrust_neighbors_Tdict
+            #     self.final_first_distrust_neighbors_Tdict = final_first_distrust_neighbors_Tdict
+            #     # set_trace()
+            #     np.save(os.getcwd()+'/data/'+self.conf.data_name+'/'+'All_distrust_neighbors_Tdict_train.npy',distrust_neighbors_Tdict)
+            #     np.save(os.getcwd()+'/data/'+self.conf.data_name+'/balance_unbalance_data_new/%s_factor/'%k+'First_distrust_neighbors_Tdict.npy' ,final_first_distrust_neighbors_Tdict)
+
+                
+            #     t_absd2_2hop = time()
+            #     print("**** END create 1-hop relationships of function, cost: %f ****"%(t_absd2_2hop-t_absd1_1hop))
+
 
             
-            # Second trust set
+            # 2阶信任关系集合-new版本
             try:
                 print("**** START Loading 2hop trust arrangeBalanceSocialData") 
                 t_absd1 = time()
-                self.first_trust_second_trust_neighbors_Tdict = np.load(os.getcwd()+'/data/'+self.conf.data_name+'/balance_unbalance_data_new/%s_factor/'%k+'First_trust_Second_trust_neighbors_%sneg_Tdict.npy'%k_2order_negtive,allow_pickle=True).item()
+                self.first_trust_second_trust_neighbors_Tdict = np.load(os.getcwd()+'/data/'+self.conf.data_name+'/balance_unbalance_data_new/%s_factor/'%k+'First_trust_Second_trust_neighbors_%sneg_Tdict.npy'%k_2order_positive,allow_pickle=True).item()
                 self.first_dis_second_dis_neighbors_Tdict = np.load(os.getcwd()+'/data/'+self.conf.data_name+'/balance_unbalance_data_new/%s_factor/'%k+'First_dis_Second_dis_neighbors_%sneg_Tdict.npy'%k_2order_negtive,allow_pickle=True).item()
+                self.final_second_trust_neighbors_Tdict = np.load(os.getcwd()+'/data/epinions/analyse_second_trust/'+'Second_trust_neighbors_Tdict_seed%s_npseed%s_tfseed%s.npy'%(self.conf.random_seed, self.conf.np_random_seed, self.conf.tf_random_seed),allow_pickle=True).item()
                 t_absd2 = time()
-                print("**** END Loading  2hop  trust arrangeBalanceSocialData, cost: %f ****"%(t_absd2-t_absd1))
+                print("**** END Loading  2hop  trust arrangeBalanceSocialData, cost: %f ****"%(t_absd2-t_absd1))  # 7秒
             
             except IOError:
 
                 print("**** START create 2-hop trust relationships of function arrangeBalanceSocialData")
                 t_absd1_1hop = time()          
 
-                first_trust_second_trust_neighbors = defaultdict(set)
-                first_dis_second_dis_neighbors = defaultdict(set)
-                second_trust_neighbors = defaultdict(set)
+                first_trust_second_trust_neighbors = defaultdict(set) #正正
+                first_dis_second_dis_neighbors = defaultdict(set) #负负
+                second_trust_neighbors = defaultdict(set) #正正 + 负负
 
-                #（+ +）
-                for t in social_user_list.keys():
+                #（+ +关系）
+                # 第2和3种抽取方法
+                filtered_neighbors_Tdict_pp = self.Filter_inactive_neighbors_pp()
+                
+                for t in social_neighbors_num_graph_Tdict.keys():
                     first_trust_second_trust_neighbors[t] = defaultdict(set)
                     for user in range(num_users):
-                        # For each user, extract the trust users they believe in as a second-order positive relationship
                         for trust_neighbor in social_neighbors_num_graph_Tdict[t][user]:
-                            first_trust_second_trust_neighbors[t][user].update(social_neighbors_num_graph_Tdict[t][trust_neighbor])
+                            first_trust_second_trust_neighbors[t][user].update(set(filtered_neighbors_Tdict_pp[t][user][trust_neighbor]))
 
-                #（- -）
-                for t in social_user_list.keys():
+                # random抽取
+                # for t in social_neighbors_num_graph_Tdict.keys():
+                #     first_trust_second_trust_neighbors[t] = defaultdict(set)
+                #     for user in range(num_users):
+                #         for trust_neighbor in social_neighbors_num_graph_Tdict[t][user]:
+                #             first_trust_second_trust_neighbors[t][user].update(social_neighbors_num_graph_Tdict[t][trust_neighbor])
+
+
+
+                # #（- -关系）
+                # 第2和3种抽取方法
+                filtered_neighbors_Tdict = self.Filter_inactive_neighbors()
+
+                for t in social_neighbors_num_graph_Tdict.keys():
                     first_dis_second_dis_neighbors[t] = defaultdict(set)
                     for user in range(num_users):
-                        # Check the number of first-order negative relationships
                         num_first_dis = len(self.final_first_distrust_neighbors_Tdict[t][user])
-                        if num_first_dis <= num_limit: #Not exceeding the quantity limit
+                        if num_first_dis <= num_limit:
                             for distrust_neighbor in self.final_first_distrust_neighbors_Tdict[t][user]:
-                                num_extract = k_2order_negtive
-                                # Randomly select （num_extract） from second-order negative relationships
-                                tmp_extract_distrust_neighbors = random.sample(list(self.all_distrust_neighbors_Tdict[t][distrust_neighbor]), num_extract)
+                                num_extract = k_2order_negtive * len(self.all_distrust_neighbors_Tdict[t][distrust_neighbor])
+                                tmp_extract_distrust_neighbors = safe_sample(list(filtered_neighbors_Tdict[t][user][distrust_neighbor]), num_extract)
                                 first_dis_second_dis_neighbors[t][user].update(set(tmp_extract_distrust_neighbors))
-                        else: # Exceed the quantity limit
-                            tmp_neighbors_list = random.sample(list(self.final_first_distrust_neighbors_Tdict[t][user]), num_limit)
+                        else:
+                            tmp_neighbors_list = safe_sample(list(self.final_first_distrust_neighbors_Tdict[t][user]), num_limit)
                             for distrust_neighbor in tmp_neighbors_list:
-                                num_extract = k_2order_negtive
-                                tmp_extract_distrust_neighbors = random.sample(list(self.all_distrust_neighbors_Tdict[t][distrust_neighbor]), num_extract)
+                                num_extract = k_2order_negtive * len(self.all_distrust_neighbors_Tdict[t][distrust_neighbor])
+                                tmp_extract_distrust_neighbors = safe_sample(list(filtered_neighbors_Tdict[t][user][distrust_neighbor]), num_extract)
                                 first_dis_second_dis_neighbors[t][user].update(set(tmp_extract_distrust_neighbors))
+                
+
+                # random抽取
+                # for t in social_neighbors_num_graph_Tdict.keys():
+                #     first_dis_second_dis_neighbors[t] = defaultdict(set)
+                #     for user in range(num_users):
+                #         num_first_dis = len(self.final_first_distrust_neighbors_Tdict[t][user])
+                #         if num_first_dis <= num_limit:
+                #             for distrust_neighbor in self.final_first_distrust_neighbors_Tdict[t][user]:
+                #                 num_extract = k_2order_negtive
+                #                 tmp_extract_distrust_neighbors = random.sample(list(self.all_distrust_neighbors_Tdict[t][distrust_neighbor]), num_extract)
+                #                 first_dis_second_dis_neighbors[t][user].update(set(tmp_extract_distrust_neighbors))
+                #         else:
+                #             tmp_neighbors_list = random.sample(list(self.final_first_distrust_neighbors_Tdict[t][user]), num_limit)
+                #             for distrust_neighbor in tmp_neighbors_list:
+                #                 num_extract = k_2order_negtive
+                #                 tmp_extract_distrust_neighbors = random.sample(list(self.all_distrust_neighbors_Tdict[t][distrust_neighbor]), num_extract)
+                #                 first_dis_second_dis_neighbors[t][user].update(set(tmp_extract_distrust_neighbors))
+
 
                 
-                #（+ +）and（- -）
-                for t in social_user_list.keys():
+                #（+ +关系）（- -关系）合并
+                for t in social_neighbors_num_graph_Tdict.keys():
                     second_trust_neighbors[t] = defaultdict(set)
                     for user in range(num_users):
                         second_trust_neighbors[t][user] = set(first_trust_second_trust_neighbors[t][user].union(first_dis_second_dis_neighbors[t][user]))
@@ -1952,10 +2055,11 @@ class DataHelper():
                 self.first_trust_second_trust_neighbors_Tdict = first_trust_second_trust_neighbors
                 self.first_dis_second_dis_neighbors_Tdict = first_dis_second_dis_neighbors
                 self.final_second_trust_neighbors_Tdict = second_trust_neighbors
-
-                np.save(os.getcwd()+'/data/'+self.conf.data_name+'/balance_unbalance_data_new/%s_factor/'%k+'First_trust_Second_trust_neighbors_%sneg_Tdict.npy'%k_2order_negtive, first_trust_second_trust_neighbors)
+                # set_trace()
+                np.save(os.getcwd()+'/data/'+self.conf.data_name+'/balance_unbalance_data_new/%s_factor/'%k+'First_trust_Second_trust_neighbors_%sneg_Tdict.npy'%k_2order_positive, first_trust_second_trust_neighbors)
                 np.save(os.getcwd()+'/data/'+self.conf.data_name+'/balance_unbalance_data_new/%s_factor/'%k+'First_dis_Second_dis_neighbors_%sneg_Tdict.npy'%k_2order_negtive, first_dis_second_dis_neighbors)
-                # np.save(os.getcwd()+'/data/'+self.conf.data_name+'/balance_unbalance_data_new/%s_factor/'%k+'Second_trust_neighbors_%sneg_Tdict.npy'%k_2order_negtive, second_trust_neighbors)
+                # np.save(os.getcwd()+'/data/epinions/analyse_total_negative/'+'Second_trust_neighbors_Tdict', second_trust_neighbors)
+                np.save(os.getcwd()+'/data/epinions/analyse_second_trust/'+'Second_trust_neighbors_Tdict_seed%s_npseed%s_tfseed%s.npy'%(self.conf.random_seed, self.conf.np_random_seed, self.conf.tf_random_seed), second_trust_neighbors)
 
                 t_absd2_2hop = time()
                 print("**** END create 2-hop trust relationships of function, cost: %f ****"%(t_absd2_2hop-t_absd1_1hop))
@@ -1963,30 +2067,31 @@ class DataHelper():
 
 
     
-    def generateBalanceSocialNeighborsSparseMatrix(self): 
+    def generateBalanceSocialNeighborsSparseMatrix(self): #（--关系）生成用new版本
             t_gbsnsm1 = time()
-            k = self.conf.k
+            k = self.conf.k_neg
             k_2order_negtive = self.conf.k_2order_negtive
+            k_2order_positive = self.conf.k_2order_positive
             print("**** START Generate Balance Social Neighbors Sparse Matrix ****")
-
-            # (++)
+            
+            # new: 正正
             try:
 
                 print("**** START loading second trust Balance Social Neighbors Sparse Matrix 2.1hop ****")
                 t1=time()
 
-                self.first_trust_second_trust_neighbors_Tdict_indices_Tdict_list = np.load(os.getcwd()+'/data/'+self.conf.data_name+'/balance_unbalance_data_new/%s_factor/'%k+'first_trust_second_trust_neighbors_Tdict_indices_Tdict_list_%sneg.npy'%k_2order_negtive, allow_pickle=True).item()
-                self.first_trust_second_trust_neighbors_Tdict_values_Tdict_list = np.load(os.getcwd()+'/data/'+self.conf.data_name+'/balance_unbalance_data_new/%s_factor/'%k+'first_trust_second_trust_neighbors_Tdict_values_Tdict_list_%sneg.npy'%k_2order_negtive, allow_pickle=True).item()
+                self.first_trust_second_trust_neighbors_Tdict_indices_Tdict_list = np.load(os.getcwd()+'/data/'+self.conf.data_name+'/balance_unbalance_data_new/%s_factor/'%k+'first_trust_second_trust_neighbors_Tdict_indices_Tdict_list_%sneg.npy'%k_2order_positive, allow_pickle=True).item()
+                self.first_trust_second_trust_neighbors_Tdict_values_Tdict_list = np.load(os.getcwd()+'/data/'+self.conf.data_name+'/balance_unbalance_data_new/%s_factor/'%k+'first_trust_second_trust_neighbors_Tdict_values_Tdict_list_%sneg.npy'%k_2order_positive, allow_pickle=True).item()
             
                 t2 =time()
-                print("END Loading second trust Balance Social Neighbors Sparse Matrix 2.1hop, cost: %f"%(t2-t1))
+                print("END Loading second trust Balance Social Neighbors Sparse Matrix 2.1hop, cost: %f"%(t2-t1)) # 124秒
 
             except IOError:
 
                 print("**** START creating second trust Balance Social Neighbors Sparse Matrix 2.1hop ****")
                 t1=time()
             
-                #Generate the indices and values of the SparseMatrix of the (++) set
+                #生成 （++集合） 的 SparseMatrix 的 indices和values
                 first_trust_second_trust_neighbors_Tdict = self.first_trust_second_trust_neighbors_Tdict
 
                 first_trust_second_trust_neighbors_Tdict_indices_Tdict_list = {}
@@ -2001,40 +2106,38 @@ class DataHelper():
                         
                         for u2 in tmp_neighbors_list:
                             
-                            # indices
                             first_trust_second_trust_neighbors_Tdict_indices_Tdict_list[stamp].append([u1,u2])
-                            # values_avg
                             first_trust_second_trust_neighbors_Tdict_values_Tdict_list[stamp].append(1.0/len(first_trust_second_trust_neighbors_Tdict[stamp][u1]))
 
                 self.first_trust_second_trust_neighbors_Tdict_indices_Tdict_list = first_trust_second_trust_neighbors_Tdict_indices_Tdict_list
                 self.first_trust_second_trust_neighbors_Tdict_values_Tdict_list = first_trust_second_trust_neighbors_Tdict_values_Tdict_list
                 
-                np.save(os.getcwd()+'/data/'+self.conf.data_name+'/balance_unbalance_data_new/%s_factor/'%k+'first_trust_second_trust_neighbors_Tdict_indices_Tdict_list_%sneg.npy'%k_2order_negtive, first_trust_second_trust_neighbors_Tdict_indices_Tdict_list)
-                np.save(os.getcwd()+'/data/'+self.conf.data_name+'/balance_unbalance_data_new/%s_factor/'%k+'first_trust_second_trust_neighbors_Tdict_values_Tdict_list_%sneg.npy'%k_2order_negtive, first_trust_second_trust_neighbors_Tdict_values_Tdict_list)
+                np.save(os.getcwd()+'/data/'+self.conf.data_name+'/balance_unbalance_data_new/%s_factor/'%k+'first_trust_second_trust_neighbors_Tdict_indices_Tdict_list_%sneg.npy'%k_2order_positive, first_trust_second_trust_neighbors_Tdict_indices_Tdict_list)
+                np.save(os.getcwd()+'/data/'+self.conf.data_name+'/balance_unbalance_data_new/%s_factor/'%k+'first_trust_second_trust_neighbors_Tdict_values_Tdict_list_%sneg.npy'%k_2order_positive, first_trust_second_trust_neighbors_Tdict_values_Tdict_list)
                 # set_trace()
 
                 t2 =time()
                 print("END creating second trust Balance Social Neighbors Sparse Matrix 2.1hop, cost: %f"%(t2-t1))
 
 
-            # (--)
+            # new: 负负
             try:
 
                 print("**** START loading second trust Balance Social Neighbors Sparse Matrix 2.2hop ****")
                 t1=time()
 
-                self.first_dis_second_dis_neighbors_Tdict_indices_Tdict_list = np.load(os.getcwd()+'/data/'+self.conf.data_name+'/balance_unbalance_data_new/%s_factor/'%k+'first_dis_second_dis_neighbors_Tdict_indices_Tdict_list_%sneg.npy'%k_2order_negtive, allow_pickle=True).item()
-                self.first_dis_second_dis_neighbors_Tdict_values_Tdict_list = np.load(os.getcwd()+'/data/'+self.conf.data_name+'/balance_unbalance_data_new/%s_factor/'%k+'first_dis_second_dis_neighbors_Tdict_values_Tdict_list_%sneg.npy'%k_2order_negtive, allow_pickle=True).item()
+                self.first_dis_second_dis_neighbors_Tdict_indices_Tdict_list = np.load(os.getcwd()+'/data/'+self.conf.data_name+'/balance_unbalance_data_new/%s_factor/'%k+'first_dis_second_dis_neighbors_Tdict_indices_Tdict_list_%sneg_random.npy'%k_2order_negtive, allow_pickle=True).item()
+                self.first_dis_second_dis_neighbors_Tdict_values_Tdict_list = np.load(os.getcwd()+'/data/'+self.conf.data_name+'/balance_unbalance_data_new/%s_factor/'%k+'first_dis_second_dis_neighbors_Tdict_values_Tdict_list_%sneg_random.npy'%k_2order_negtive, allow_pickle=True).item()
             
                 t2 =time()
-                print("END Loading second trust Balance Social Neighbors Sparse Matrix 2.2hop, cost: %f"%(t2-t1))
+                print("END Loading second trust Balance Social Neighbors Sparse Matrix 2.2hop, cost: %f"%(t2-t1)) # 124秒
 
             except IOError:
 
                 print("**** START creating second trust Balance Social Neighbors Sparse Matrix 2.2hop ****")
                 t1=time()
             
-                #Generate the indices and values of the SparseMatrix of the (--) set
+                #生成 （--集合） 的 SparseMatrix 的 indices和values
                 first_dis_second_dis_neighbors_Tdict = self.first_dis_second_dis_neighbors_Tdict
 
                 first_dis_second_dis_neighbors_Tdict_indices_Tdict_list = {}
@@ -2048,16 +2151,266 @@ class DataHelper():
                         tmp_neighbors_list = sorted(list(first_dis_second_dis_neighbors_Tdict[stamp][u1]))
                         
                         for u2 in tmp_neighbors_list:
-                            # indices
+                            
                             first_dis_second_dis_neighbors_Tdict_indices_Tdict_list[stamp].append([u1,u2])
-                            # values_avg
                             first_dis_second_dis_neighbors_Tdict_values_Tdict_list[stamp].append(1.0/len(first_dis_second_dis_neighbors_Tdict[stamp][u1]))
 
                 self.first_dis_second_dis_neighbors_Tdict_indices_Tdict_list = first_dis_second_dis_neighbors_Tdict_indices_Tdict_list
                 self.first_dis_second_dis_neighbors_Tdict_values_Tdict_list = first_dis_second_dis_neighbors_Tdict_values_Tdict_list
                 
-                np.save(os.getcwd()+'/data/'+self.conf.data_name+'/balance_unbalance_data_new/%s_factor/'%k+'first_dis_second_dis_neighbors_Tdict_indices_Tdict_list_%sneg.npy'%k_2order_negtive, first_dis_second_dis_neighbors_Tdict_indices_Tdict_list)
-                np.save(os.getcwd()+'/data/'+self.conf.data_name+'/balance_unbalance_data_new/%s_factor/'%k+'first_dis_second_dis_neighbors_Tdict_values_Tdict_list_%sneg.npy'%k_2order_negtive, first_dis_second_dis_neighbors_Tdict_values_Tdict_list)
+                np.save(os.getcwd()+'/data/'+self.conf.data_name+'/balance_unbalance_data_new/%s_factor/'%k+'first_dis_second_dis_neighbors_Tdict_indices_Tdict_list_%sneg_random.npy'%k_2order_negtive, first_dis_second_dis_neighbors_Tdict_indices_Tdict_list)
+                np.save(os.getcwd()+'/data/'+self.conf.data_name+'/balance_unbalance_data_new/%s_factor/'%k+'first_dis_second_dis_neighbors_Tdict_values_Tdict_list_%sneg_random.npy'%k_2order_negtive, first_dis_second_dis_neighbors_Tdict_values_Tdict_list)
+                # set_trace()
 
                 t2 =time()
                 print("END creating second trust Balance Social Neighbors Sparse Matrix 2.2hop, cost: %f"%(t2-t1))
+
+
+    def Compute_average_neighbors_number(self):
+        social_positive_data_Tdict = np.load(os.getcwd()+'/data/%s/train_social_positive_data_for_user1_user2_withoutR_Tdict.npy'%self.conf.data_name,allow_pickle=True).item()
+        self.social_positive_data_Tdict = social_positive_data_Tdict
+        
+        # 用于存储每个t时刻下所有用户的邻居数量总和以及用户数量（用于求平均）
+        sum_neighbors_per_t = {}
+        num_users_per_t = {}
+
+        # 遍历t时刻对应的内层字典（包含不同用户的数据）
+        for t in social_positive_data_Tdict.keys():
+            sum_neighbors = 0
+            num_users = len(social_positive_data_Tdict[t])
+            # 遍历每个t时刻下的用户及其邻居列表
+            for user in social_positive_data_Tdict[t]:
+                sum_neighbors += len(social_positive_data_Tdict[t][user])
+            sum_neighbors_per_t[t] = sum_neighbors
+            num_users_per_t[t] = num_users
+
+        # 计算每个t时刻下的平均邻居数
+        average_neighbors_per_t = {}
+        for t in sum_neighbors_per_t:
+            average_neighbors_per_t[t] = math.ceil(sum_neighbors_per_t[t] / num_users_per_t[t] if num_users_per_t[t] > 0 else 0)
+
+        return average_neighbors_per_t
+
+
+    def Filter_1order_active_neighbors(self):
+        social_positive_data_Tdict = self.social_positive_data_Tdict
+        all_distrust_neighbors_Tdict = self.all_distrust_neighbors_Tdict
+        average_neighbors_per_t = self.average_neighbors_per_t
+
+        # 用于存储筛选后的邻居集合，结构依然是按照t时刻和用户user来组织
+        filtered_1order_neighbors_Tdict = {}
+
+        for t in all_distrust_neighbors_Tdict.keys():
+            filtered_1order_neighbors_Tdict[t] = {}
+            for user in all_distrust_neighbors_Tdict[t].keys():
+                current_user_neighbors = all_distrust_neighbors_Tdict[t][user]
+                avg_neighbors = average_neighbors_per_t[t]
+                # 使用filter和lambda表达式筛选符合条件的邻居n
+                filtered_neighbors = list(filter(lambda n: n in social_positive_data_Tdict[t] and len(social_positive_data_Tdict[t][n]) > avg_neighbors, current_user_neighbors))
+                filtered_1order_neighbors_Tdict[t][user] = filtered_neighbors
+
+        np.save(os.getcwd()+'/data/'+'%s/balance_unbalance_data_new/1_factor/Filter_active/'%self.conf.data_name+'Filtered_1order_neighbors_Tdict_seed%s_npseed%s_tfseed%s.npy'%(self.conf.random_seed, self.conf.np_random_seed, self.conf.tf_random_seed),filtered_1order_neighbors_Tdict)
+
+        return filtered_1order_neighbors_Tdict
+
+   
+    def Filter_1order_inactive_neighbors(self):
+        social_positive_data_Tdict = self.social_positive_data_Tdict
+        all_distrust_neighbors_Tdict = self.all_distrust_neighbors_Tdict
+        average_neighbors_per_t = self.average_neighbors_per_t
+
+        # 用于存储筛选后的邻居集合，结构依然是按照t时刻和用户user来组织
+        filtered_1order_neighbors_Tdict = {}
+
+        for t in all_distrust_neighbors_Tdict.keys():
+            filtered_1order_neighbors_Tdict[t] = {}
+            if t == 0:
+                for user in all_distrust_neighbors_Tdict[t].keys():
+                    current_user_neighbors = all_distrust_neighbors_Tdict[t][user]
+                    avg_neighbors = average_neighbors_per_t[t]
+                    # 使用filter和lambda表达式筛选符合条件的邻居n
+                    filtered_neighbors = list(filter(lambda n: n in social_positive_data_Tdict[t] and len(social_positive_data_Tdict[t][n]) > avg_neighbors, current_user_neighbors))
+                    filtered_1order_neighbors_Tdict[t][user] = filtered_neighbors
+            else:
+                for user in all_distrust_neighbors_Tdict[t].keys():
+                    current_user_neighbors = all_distrust_neighbors_Tdict[t][user]
+                    avg_neighbors = average_neighbors_per_t[t]
+                    # 使用filter和lambda表达式筛选符合条件的邻居n
+                    active_neighbors = list(filter(lambda n: n in social_positive_data_Tdict[t] and len(social_positive_data_Tdict[t][n]) > avg_neighbors, current_user_neighbors))
+                    pre_inactive_neighbors = list(filter(lambda n: n in social_positive_data_Tdict[t-1] and len(social_positive_data_Tdict[t-1][n]) < average_neighbors_per_t[t-1], all_distrust_neighbors_Tdict[t-1][user]))
+                    intersection_neighbors = list(set(active_neighbors).intersection(pre_inactive_neighbors))
+                    if len(intersection_neighbors) == 0:
+                        intersection_neighbors = active_neighbors
+
+                    filtered_1order_neighbors_Tdict[t][user] = intersection_neighbors
+
+        np.save(os.getcwd()+'/data/'+'%s/balance_unbalance_data_new/1_factor/Filter_inactive_active/'%self.conf.data_name+'Filtered_1order_neighbors_Tdict_seed%s_npseed%s_tfseed%s.npy'%(self.conf.random_seed, self.conf.np_random_seed, self.conf.tf_random_seed),filtered_1order_neighbors_Tdict)
+
+        return filtered_1order_neighbors_Tdict
+
+
+    def Filter_active_neighbors(self):
+        social_positive_data_Tdict = self.social_positive_data_Tdict
+        all_distrust_neighbors_Tdict = self.all_distrust_neighbors_Tdict
+        average_neighbors_per_t = self.average_neighbors_per_t
+        final_first_distrust_neighbors_Tdict = self.final_first_distrust_neighbors_Tdict
+
+        # 用于存储筛选后的邻居集合，结构依然是按照t时刻和用户user来组织
+        filtered_neighbors_Tdict = {}
+
+        for t in final_first_distrust_neighbors_Tdict.keys():
+            filtered_neighbors_Tdict[t] = {}
+            for user in final_first_distrust_neighbors_Tdict[t].keys():
+                current_user_neighbors = final_first_distrust_neighbors_Tdict[t][user]
+                avg_neighbors = average_neighbors_per_t[t]
+                filtered_neighbors = {}
+                for distrust_neighbor in current_user_neighbors:
+                    filtered_neighbors[distrust_neighbor] = []
+                    neighbor_all_neighbors = all_distrust_neighbors_Tdict[t][distrust_neighbor]
+                    # 使用filter和lambda表达式筛选符合条件的邻居n
+                    filtered_n_list = list(filter(lambda n: n in social_positive_data_Tdict[t] and len(social_positive_data_Tdict[t][n]) > avg_neighbors, neighbor_all_neighbors))
+                    filtered_neighbors[distrust_neighbor].extend(filtered_n_list)
+                filtered_neighbors_Tdict[t][user] = filtered_neighbors
+
+        np.save(os.getcwd()+'/data/'+'%s/balance_unbalance_data_new/1_factor/Filter_active/'%self.conf.data_name+'Filtered_neighbors_Tdict_seed%s_npseed%s_tfseed%s.npy'%(self.conf.random_seed, self.conf.np_random_seed, self.conf.tf_random_seed),filtered_neighbors_Tdict)
+
+        return filtered_neighbors_Tdict
+
+
+    def Filter_active_neighbors_pp(self):
+        social_positive_data_Tdict = self.social_positive_data_Tdict
+        all_distrust_neighbors_Tdict = self.all_distrust_neighbors_Tdict
+        average_neighbors_per_t = self.average_neighbors_per_t
+        final_first_distrust_neighbors_Tdict = self.final_first_distrust_neighbors_Tdict
+
+        # 用于存储筛选后的邻居集合，结构依然是按照t时刻和用户user来组织
+        filtered_neighbors_Tdict = {}
+
+        for t in social_positive_data_Tdict.keys():
+            filtered_neighbors_Tdict[t] = {}
+            for user in social_positive_data_Tdict[t].keys():
+                current_user_neighbors = social_positive_data_Tdict[t][user]
+                avg_neighbors = average_neighbors_per_t[t]
+                filtered_neighbors = {}
+                for trust_neighbor in current_user_neighbors:
+                    filtered_neighbors[trust_neighbor] = []
+                    if trust_neighbor in social_positive_data_Tdict[t].keys():
+                        neighbor_all_neighbors = social_positive_data_Tdict[t][trust_neighbor]
+                        # 使用filter和lambda表达式筛选符合条件的邻居n
+                        filtered_n_list = list(filter(lambda n: n in social_positive_data_Tdict[t] and len(social_positive_data_Tdict[t][n]) > avg_neighbors, neighbor_all_neighbors))
+                        filtered_neighbors[trust_neighbor].extend(filtered_n_list)
+                filtered_neighbors_Tdict[t][user] = filtered_neighbors
+
+        # print(filtered_neighbors_Tdict)
+
+        np.save(os.getcwd()+'/data/'+'%s/balance_unbalance_data_new/1_factor/Filter_active/pp/'%self.conf.data_name+'Filtered_neighbors_Tdict_seed%s_npseed%s_tfseed%s.npy'%(self.conf.random_seed, self.conf.np_random_seed, self.conf.tf_random_seed),filtered_neighbors_Tdict)
+
+        return filtered_neighbors_Tdict
+
+
+    def Filter_inactive_neighbors(self):
+        social_positive_data_Tdict = self.social_positive_data_Tdict
+        all_distrust_neighbors_Tdict = self.all_distrust_neighbors_Tdict
+        average_neighbors_per_t = self.average_neighbors_per_t
+        final_first_distrust_neighbors_Tdict = self.final_first_distrust_neighbors_Tdict
+
+        # 用于存储整合后的筛选结果，结构依然是按照t时刻和用户user来组织
+        filtered_neighbors_Tdict = {}
+        count = 0
+
+        # 假设t是从0开始的连续整数，根据t的值来处理不同情况
+        for t in final_first_distrust_neighbors_Tdict.keys():
+            filtered_neighbors_Tdict[t] = {}
+            if t == 0:
+                # t = 0时，只进行活跃用户筛选，和原逻辑一样
+                for user in final_first_distrust_neighbors_Tdict[t].keys():
+                    current_user_neighbors = final_first_distrust_neighbors_Tdict[t][user]
+                    avg_neighbors = average_neighbors_per_t[t]
+                    filtered_neighbors = {}
+                    for distrust_neighbor in current_user_neighbors:
+                        filtered_neighbors[distrust_neighbor] = []
+                        neighbor_all_neighbors = all_distrust_neighbors_Tdict[t][distrust_neighbor]
+                        # 使用filter和lambda表达式筛选符合条件的活跃邻居n
+                        active_neighbors = list(filter(lambda n: n in social_positive_data_Tdict[t] and len(social_positive_data_Tdict[t][n]) > avg_neighbors, neighbor_all_neighbors))
+                        filtered_neighbors[distrust_neighbor].extend(active_neighbors)
+                    filtered_neighbors_Tdict[t][user] = filtered_neighbors
+            else:
+                # t > 0时，整合t时刻活跃用户和t - 1时刻不活跃用户的筛选结果
+                for user in final_first_distrust_neighbors_Tdict[t].keys():
+                    current_user_neighbors = final_first_distrust_neighbors_Tdict[t][user]
+                    avg_neighbors = average_neighbors_per_t[t]
+                    filtered_neighbors = {}
+                    # 筛选t时刻的活跃用户
+                    for distrust_neighbor in current_user_neighbors:
+                        filtered_neighbors[distrust_neighbor] = []
+                        neighbor_all_neighbors = all_distrust_neighbors_Tdict[t][distrust_neighbor]
+                        # 使用filter和lambda表达式筛选符合条件的活跃邻居n
+                        active_neighbors = list(filter(lambda n: n in social_positive_data_Tdict[t] and len(social_positive_data_Tdict[t][n]) > avg_neighbors, neighbor_all_neighbors))
+                        pre_inactive_neighbors = list(filter(lambda n: n in social_positive_data_Tdict[t-1] and len(social_positive_data_Tdict[t-1][n]) < average_neighbors_per_t[t-1], all_distrust_neighbors_Tdict[t-1][distrust_neighbor]))
+                        intersection_neighbors = list(set(active_neighbors).intersection(pre_inactive_neighbors))
+                        if len(intersection_neighbors) == 0:
+                            intersection_neighbors = active_neighbors
+                        filtered_neighbors[distrust_neighbor].extend(intersection_neighbors)
+
+                    filtered_neighbors_Tdict[t][user] = filtered_neighbors
+
+        # 保存整合后的筛选结果，你可以根据实际需求调整文件名等
+        np.save(os.getcwd() + '/data/' + '%s/balance_unbalance_data_new/1_factor/Filter_inactive_active/'%self.conf.data_name + 'Filtered_neighbors_Tdict_seed%s_npseed%s_tfseed%s.npy' % (self.conf.random_seed, self.conf.np_random_seed, self.conf.tf_random_seed), filtered_neighbors_Tdict)
+        print("count:", count)
+        return filtered_neighbors_Tdict
+
+
+    def Filter_inactive_neighbors_pp(self):
+        social_positive_data_Tdict = self.social_positive_data_Tdict
+        all_distrust_neighbors_Tdict = self.all_distrust_neighbors_Tdict
+        average_neighbors_per_t = self.average_neighbors_per_t
+        final_first_distrust_neighbors_Tdict = self.final_first_distrust_neighbors_Tdict
+
+
+        # 用于存储整合后的筛选结果，结构依然是按照t时刻和用户user来组织
+        filtered_neighbors_Tdict = {}
+
+        # 假设t是从0开始的连续整数，根据t的值来处理不同情况
+        for t in social_positive_data_Tdict.keys():
+            filtered_neighbors_Tdict[t] = defaultdict(dict)
+            if t == 0:
+                # t = 0时，只进行活跃用户筛选，和原逻辑一样
+                for user in social_positive_data_Tdict[t].keys():
+                    current_user_neighbors = social_positive_data_Tdict[t][user]
+                    avg_neighbors = average_neighbors_per_t[t]
+                    filtered_neighbors = {}
+                    for trust_neighbor in current_user_neighbors:
+                        filtered_neighbors[trust_neighbor] = []
+                        if trust_neighbor in social_positive_data_Tdict[t].keys():
+                            neighbor_all_neighbors = social_positive_data_Tdict[t][trust_neighbor]
+                            # 使用filter和lambda表达式筛选符合条件的邻居n
+                            filtered_n_list = list(filter(lambda n: n in social_positive_data_Tdict[t] and len(social_positive_data_Tdict[t][n]) > avg_neighbors, neighbor_all_neighbors))
+                            filtered_neighbors[trust_neighbor].extend(filtered_n_list)
+                    filtered_neighbors_Tdict[t][user] = filtered_neighbors
+            else:
+                # t > 0时，整合t时刻活跃用户和t - 1时刻不活跃用户的筛选结果
+                for user in social_positive_data_Tdict[t].keys():
+                    current_user_neighbors = social_positive_data_Tdict[t][user]
+                    avg_neighbors = average_neighbors_per_t[t]
+                    filtered_neighbors = {}
+                    # 筛选t时刻的活跃用户
+                    for trust_neighbor in current_user_neighbors:
+                        filtered_neighbors[trust_neighbor] = []
+                        if trust_neighbor in social_positive_data_Tdict[t].keys():
+
+                            neighbor_all_neighbors = social_positive_data_Tdict[t][trust_neighbor]
+                            # 使用filter和lambda表达式筛选符合条件的活跃邻居n
+                            active_neighbors = list(filter(lambda n: n in social_positive_data_Tdict[t] and len(social_positive_data_Tdict[t][n]) > avg_neighbors, neighbor_all_neighbors))
+                            pre_inactive_neighbors = []
+                            if trust_neighbor in social_positive_data_Tdict[t-1].keys():
+                                pre_inactive_neighbors = list(filter(lambda n: n in social_positive_data_Tdict[t-1] and len(social_positive_data_Tdict[t-1][n]) < average_neighbors_per_t[t-1], social_positive_data_Tdict[t-1][trust_neighbor]))
+                            intersection_neighbors = list(set(active_neighbors).intersection(pre_inactive_neighbors))
+                            if len(intersection_neighbors) == 0:
+                                intersection_neighbors = active_neighbors
+                            filtered_neighbors[trust_neighbor].extend(intersection_neighbors)
+
+                    filtered_neighbors_Tdict[t][user] = filtered_neighbors
+
+        # 保存整合后的筛选结果，你可以根据实际需求调整文件名等
+        np.save(os.getcwd() + '/data/' + '%s/balance_unbalance_data_new/1_factor/Filter_inactive_active/pp/'%self.conf.data_name + 'Filtered_neighbors_Tdict_seed%s_npseed%s_tfseed%s.npy' % (self.conf.random_seed, self.conf.np_random_seed, self.conf.tf_random_seed), filtered_neighbors_Tdict)
+        return filtered_neighbors_Tdict
