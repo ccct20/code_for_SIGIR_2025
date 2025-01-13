@@ -1,12 +1,12 @@
 import sys, os, argparse
 
-sys.path.append(os.path.join(os.getcwd(), 'class_BRAJM'))
+sys.path.append(os.path.join(os.getcwd(), 'class_BE4JM'))
 
 from ParserConf import ParserConf
 from DataUtil import DataUtil
 from Evaluate import Evaluate
 
-from BRAJM import BRAJM
+from BE4JM import BE4JM
 
 from ipdb import set_trace
 
