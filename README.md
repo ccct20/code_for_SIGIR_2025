@@ -2,7 +2,7 @@
 The BE4JM code
 
 # BE4JM code for SIGIR-2025 anonymous review 
-Title: Enhancing Dynamic Trust and Interest Prediction Through Balance Relationships Augmentation
+Title: Enhancing Dynamic Trust and Interest Prediction Through Balance Relationships Excitation
 
 Paper ID: 10207
 
