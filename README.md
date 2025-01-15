@@ -4,7 +4,7 @@ The BE4JM code
 # BE4JM code for SIGIR-2025 anonymous review 
 Title: Enhancing Dynamic Trust and Interest Prediction Through Balance Relationships Excitation
 
-Paper ID: 10207
+Paper ID: 516
 
 
 In this paper, we reconsider the often overlooked informative relationships among unidentified social links and propose BE4JM to jointly model two types of user behavior on SNSs. Specifically, the proposed framework includes a comprehensive joint modeling framework, which includes a data augmentation module based on social balance theory, the recurrent neural networks for extracting dynamic embeddings, the time-aware multi-level neural attention networks to flexibly aggregate information from both node and graph perspectives, thereby enhancing the quality of embeddings, and an interactive module to mutually enhance the effectiveness of two prediction tasks. Extensive experiments demonstrate the effectiveness of our proposed framework.
