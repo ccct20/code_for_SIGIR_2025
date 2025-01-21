@@ -10,7 +10,7 @@ Paper ID: 516
 In this paper, we reconsider the often overlooked informative relationships among unidentified social links and propose BE4JM to jointly model two types of user behavior on SNSs. Specifically, the proposed framework includes a comprehensive joint modeling framework, which includes a data augmentation module based on social balance theory, the recurrent neural networks for extracting dynamic embeddings, the time-aware multi-level neural attention networks to flexibly aggregate information from both node and graph perspectives, thereby enhancing the quality of embeddings, and an interactive module to mutually enhance the effectiveness of two prediction tasks. Extensive experiments demonstrate the effectiveness of our proposed framework.
 
 <div align="center">
-  <img src="https://github.com/ccct20/code_for_SIGIR_2025/blob/main/images/figure_4.jpg" alt="Description" width="280" height="200" />
+  <img src="https://github.com/ccct20/code_for_SIGIR_2025/blob/main/images/figure2_new.png" alt="Description" width="280" height="200" />
   <img src="https://github.com/ccct20/code_for_SIGIR_2025/blob/main/images/figure3_new.jpg" alt="Description" width="450" height="200" />
 </div>
 
